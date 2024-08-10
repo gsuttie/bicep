@@ -40,7 +40,7 @@ $locationShortCode = $locationShortCodeMap.$location
 $user = az ad signed-in-user show --query id -o tsv
 az role assignment create --assignee $user --scope "/" --role "Owner"
 
-# Check we have Permissions to deploy to the subscription
+# Check we have Permissions to deploy to 
 CheckPermissions
 
 if ($deploy) {
