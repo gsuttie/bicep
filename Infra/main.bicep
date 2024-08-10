@@ -46,6 +46,24 @@ param tags object = {
   Deployedby: ''
 }
 
+// Storage Account Parameters
+param storageAccountName string = 'sa${customerName}${environmentName}${locationShortCode}'
+
+
+// Storage Account Resource Group
+param rgStorage string = 'rg-storage-${customerName}-${environmentName}-${locationShortCode}'
+param rgWorkload string = 'rg-workload-${customerName}-${environmentName}-${locationShortCode}'
+param rgMonitoring string = 'rg-monitoring-${customerName}-${environmentName}-${locationShortCode}'
+
+
+// Log Analytics Parameteres
+param skuNameLogAnalytics string = 'PerGB2018'
+
+@description('Log Analytics Daily Quota in GB. Default: 1GB')
+param dailyQuotaGb int = 1
+
+@description('Number of days data will be retained for.')
+param dataRetention int = 365
 
 // *********************** No Hardcoded Values below this point ********************************************** // 
 
@@ -56,12 +74,20 @@ param tags object = {
 @description('Array of resource Groups.')
 param resourceGroupArray array = [
   {
-    name: 'rg-${customerName}-workload-${environmentName}-${locationShortCode}' //0
+    name: rgWorkload
+    location: location
+  }
+  {
+    name: rgStorage
+    location: location
+  }
+  {
+    name: rgMonitoring
     location: location
   }
 ]
 
-// Deploy required Resource Groups - New Resources 
+//MARK: CreateResourceGroups
 module createResourceGroups 'modules/resources/resource-group/main.bicep' = [
   for (resourceGroup, i) in resourceGroupArray: {
     scope: subscription(subscriptionId)
@@ -73,3 +99,41 @@ module createResourceGroups 'modules/resources/resource-group/main.bicep' = [
     }
   }
 ]
+
+//MARK: StorageAccount- 
+@description('Deploy storage account')
+module createStorageAccount 'modules/storage/storage-account/main.bicep' = {
+  scope: resourceGroup(rgStorage)
+  name: storageAccountName
+  params: {
+    name: storageAccountName
+    location: location
+    tags: tags
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createAzureLogAnalytics.outputs.resourceId // This is the resourceId of the Log Analytics workspace
+      }
+    ]
+  }
+  dependsOn: [
+    createResourceGroups
+  ]
+}
+
+//MARK: AzureLogAnalytics
+ @description('Deploy Azure Log Analytics')
+ module createAzureLogAnalytics 'modules/operational-insights/workspace/main.bicep' = {
+   scope: resourceGroup(rgMonitoring)
+   name: 'logAnalytics'
+   params: {
+     name: 'la-${customerName}-${environmentName}-${locationShortCode}'
+     skuName: skuNameLogAnalytics
+     location: location
+     dailyQuotaGb: dailyQuotaGb
+     dataRetention: dataRetention
+     tags: tags
+   }
+   dependsOn: [
+    createResourceGroups
+   ]
+ }
